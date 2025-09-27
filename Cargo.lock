@@ -520,6 +520,7 @@ dependencies = [
  "encoding_rs",
  "enum-primitive-derive",
  "itertools 0.10.5",
+ "log",
  "num-traits",
  "paste",
  "thiserror",

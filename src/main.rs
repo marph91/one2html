@@ -1,10 +1,10 @@
 #![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 use crate::cli::Opt;
-use crate::utils::with_progress;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::{eyre, ContextCompat};
 use console::style;
+use log::info;
 use log::LevelFilter;
 use onenote_parser::Parser;
 use std::path::Path;
@@ -68,9 +68,9 @@ fn convert(path: &Path, output_dir: &Path) -> Result<()> {
     match path.extension().map(|p| p.to_string_lossy()).as_deref() {
         Some("one") => {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            println!("Processing section {}...", style(&name).bright());
+            info!("Processing section: {}", style(&name).bright());
 
-            let section = with_progress("Parsing input file...", || parser.parse_section(&path))?;
+            let section = parser.parse_section(&path)?;
 
             section::Renderer::new().render(&section, output_dir)?;
         }
@@ -83,9 +83,8 @@ fn convert(path: &Path, output_dir: &Path) -> Result<()> {
                 .to_string_lossy();
             println!("Processing notebook {}...", style(&name).bright());
 
-            let notebook = with_progress("[1/2] Parsing input files...", || {
-                parser.parse_notebook(&path)
-            })?;
+            info!("[1/2] Parsing input files...");
+            let notebook = { parser.parse_notebook(&path) }?;
 
             let notebook_name = path
                 .parent()
@@ -94,9 +93,8 @@ fn convert(path: &Path, output_dir: &Path) -> Result<()> {
                 .wrap_err("Parent folder has no name")?
                 .to_string_lossy();
 
-            with_progress("[2/2] Rendering sections...", || {
-                notebook::Renderer::new().render(&notebook, &notebook_name, &output_dir)
-            })?;
+            info!("[2/2] Rendering sections...");
+            { notebook::Renderer::new().render(&notebook, &notebook_name, &output_dir) }?;
         }
         Some(ext) => return Err(eyre!("Invalid file extension: {}", ext)),
         _ => return Err(eyre!("Couldn't determine file type")),

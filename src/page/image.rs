@@ -2,6 +2,7 @@ use crate::page::Renderer;
 use crate::utils::{px, AttributeSet, StyleSet};
 use color_eyre::eyre::WrapErr;
 use color_eyre::Result;
+use log::info;
 use onenote_parser::contents::Image;
 use std::fs;
 
@@ -11,6 +12,9 @@ impl<'a> Renderer<'a> {
 
         if let Some(data) = image.data() {
             let filename = self.determine_image_filename(image)?;
+
+            info!("Rendering image: {:?}", filename);
+
             fs::write(self.output.join(filename.clone()), data)
                 .wrap_err("Failed to write image")?;
 

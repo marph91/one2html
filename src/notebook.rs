@@ -1,6 +1,6 @@
 use crate::templates::notebook::Toc;
 use crate::{section, templates};
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use onenote_parser::notebook::Notebook;
 use onenote_parser::property::common::Color;
 use onenote_parser::section::{Section, SectionEntry};
@@ -8,6 +8,7 @@ use palette::rgb::Rgb;
 use palette::{Alpha, ConvertFrom, Hsl, Saturate, Shade, Srgb};
 use std::fs;
 use std::path::Path;
+use log::info;
 
 pub(crate) type RgbColor = Alpha<Rgb<palette::encoding::Srgb, u8>, f32>;
 
@@ -19,6 +20,7 @@ impl Renderer {
     }
 
     pub fn render(&mut self, notebook: &Notebook, name: &str, output_dir: &Path) -> Result<()> {
+        info!("Notebook name: {:?} {:?}", name, output_dir);
         if !output_dir.is_dir() {
             fs::create_dir(&output_dir)?;
         }
@@ -42,18 +44,21 @@ impl Renderer {
                 }
                 SectionEntry::SectionGroup(group) => {
                     let dir_name = sanitize_filename::sanitize(group.display_name());
-                    let group_dir = notebook_dir.join(dir_name);
-                    if !group_dir.is_dir() {
-                        fs::create_dir(&group_dir)?;
+                    let section_group_dir = notebook_dir.join(dir_name);
+                    info!("Section group directory: {:?}", section_group_dir);
+                    if !section_group_dir.is_dir() {
+                        fs::create_dir(&section_group_dir)?;
                     }
 
                     let mut entries = Vec::new();
 
                     for entry in group.entries() {
                         if let SectionEntry::Section(section) = entry {
-                            entries.push(self.render_section(section, &group_dir, &output_dir)?);
-                        } else {
-                            return Err(eyre!("Nested section groups are not yet supported"));
+                            entries.push(self.render_section(
+                                section,
+                                &section_group_dir,
+                                &output_dir,
+                            )?);
                         }
                     }
 
@@ -79,11 +84,14 @@ impl Renderer {
         base_dir: &Path,
     ) -> Result<templates::notebook::Section> {
         let mut renderer = section::Renderer::new();
-        let path = renderer.render(section, notebook_dir)?;
+        let section_path = renderer.render(section, notebook_dir)?;
+        info!("section_path: {:?}", section_path);
 
+        let path_from_base_dir = section_path.strip_prefix(base_dir)?.to_string_lossy().to_string();
+        info!("path_from_base_dir: {:?}", path_from_base_dir);
         Ok(templates::notebook::Section {
             name: section.display_name().to_string(),
-            path: path.strip_prefix(base_dir)?.to_string_lossy().to_string(),
+            path: path_from_base_dir,
             color: section.color().map(prepare_color),
         })
     }

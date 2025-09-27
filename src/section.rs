@@ -1,5 +1,6 @@
 use crate::{page, templates};
 use color_eyre::eyre::Result;
+use log::info;
 use onenote_parser::section::Section;
 use std::collections::HashSet;
 use std::fs;
@@ -21,9 +22,17 @@ impl Renderer {
     pub fn render(&mut self, section: &Section, output_dir: &Path) -> Result<PathBuf> {
         let section_dir = output_dir.join(sanitize_filename::sanitize(section.display_name()));
 
+        info!(
+            "section_dir: {:?}, output_dir: {:?}",
+            section_dir,
+            output_dir
+        );
+
         if !section_dir.is_dir() {
             fs::create_dir(&section_dir)?;
         }
+
+        info!("Rendering section: {:?}", section_dir);
 
         let mut toc = Vec::new();
         let mut fallback_title_index = 0;
@@ -40,16 +49,17 @@ impl Renderer {
                 let file_name = self.determine_page_filename(&file_name)?;
                 let file_name = sanitize_filename::sanitize(file_name + ".html");
 
-                let output_file = section_dir.join(file_name);
+                let page_path = section_dir.join(file_name);
 
                 let mut renderer = page::Renderer::new(section_dir.clone(), self);
-                let output = renderer.render_page(page)?;
+                let page_html = renderer.render_page(page)?;
 
-                fs::write(&output_file, output)?;
+                info!("Creating page file: {:?}", page_path);
+                fs::write(&page_path, page_html)?;
 
                 toc.push((
                     title,
-                    output_file
+                    page_path
                         .strip_prefix(&output_dir)?
                         .to_string_lossy()
                         .to_string(),
@@ -60,6 +70,7 @@ impl Renderer {
 
         let toc_html = templates::section::render(section.display_name(), toc)?;
         let toc_file = output_dir.join(format!("{}.html", section.display_name()));
+        info!("ToC: {:?}", toc_file);
         fs::write(toc_file, toc_html)?;
 
         Ok(section_dir)

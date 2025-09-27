@@ -1,6 +1,7 @@
 use crate::page::Renderer;
 use color_eyre::eyre::{ContextCompat, WrapErr};
 use color_eyre::Result;
+use log::info;
 use onenote_parser::contents::EmbeddedFile;
 use onenote_parser::property::embedded_file::FileType;
 use std::fs;
@@ -11,15 +12,24 @@ impl<'a> Renderer<'a> {
         let content;
 
         let filename = self.determine_filename(file.filename())?;
+
+        info!("Rendering embedded file: {:?}", filename);
+
         fs::write(self.output.join(filename.clone()), file.data())
             .wrap_err("Failed to write embedded file")?;
 
         let file_type = Self::guess_type(file);
 
         match file_type {
-            FileType::Audio => content = format!("<audio controls src=\"{}\"></audio>", filename),
+            // TODO: we still don't have support for the audio tag on html notes https://github.com/laurent22/joplin/issues/11939
+            // FileType::Audio => content = format!("<audio class=\"media-player media-audio\"controls><source src=\"{}\" type=\"audio/x-wav\"></source></audio>", filename),
             FileType::Video => content = format!("<video controls src=\"{}\"></video>", filename),
-            FileType::Unknown => content = format!("<embed src=\"{}\" />", filename),
+            FileType::Unknown | FileType::Audio => {
+                content = format!(
+                    "<p style=\"font-size: 11pt; line-height: 17px;\"><a href=\"{}\">{}</a></p>",
+                    filename, filename
+                )
+            }
         };
 
         Ok(self.render_with_note_tags(file.note_tags(), content))
@@ -58,20 +68,16 @@ impl<'a> Renderer<'a> {
             }
 
             let path = PathBuf::from(filename);
-            let ext = path
-                .extension()
-                .wrap_err("Embedded file has no extension")?
-                .to_str()
-                .wrap_err("Embedded file name is non utf-8")?;
+            let ext = path.extension().unwrap_or_default();
             let base = path
                 .as_os_str()
                 .to_str()
                 .wrap_err("Embedded file name is non utf-8")?
-                .strip_suffix(ext)
+                .strip_suffix(ext.to_string_lossy().as_ref())
                 .wrap_err("Failed to strip extension from file name")?
                 .trim_matches('.');
 
-            current_filename = format!("{}-{}.{}", base, i, ext);
+            current_filename = format!("{}-{}.{}", base, i, ext.to_string_lossy());
 
             i += 1;
         }
